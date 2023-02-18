@@ -1,0 +1,26 @@
+\textbf{Voice datasets}
+
+For the speech features datasets, three different datasets have been chosen, each with different attributes and number of instances. These three datasets are: 
+
+\begin{itemize}
+	\item \textbf{Italian Parkinson's Voice and Speech dataset}: Extracted from \textbf{CITAAAAAAA}, it accounts for 65 patients, of which 28 do have PD. The dataset was extracted with sevarl recording devices and has a total of 7 features.
+	\item \textbf{Parkinson Dataset with replicated acoustic features Data Set}: Extracted from \textbf{CITAAAAAAA}. It contains information about 80 people, of which 40 have PD. This dataset contains more information, since the speech recording was repeated three times, so the total number of instances is 240. The number of features is 10, which are very similar to the previous dataset. 
+	\item \textbf{Parkinsons Data Set}: Extracted from \textbf{CITAAAAA}, it acocunts for 195 patients, of which 147 have PD. The number of features is 23. This dataset is larger than the other two, and thus will be more reliable when extracting conclusions. 
+\end{itemize}
+
+All three datasets will be treated separately, but in a parallel way when studying the results of CVM, NN and RF. Since the first two datasets are smaller in size, results may vary more depending on the split of test and train subsets that are extracted, and it is expected more variance in these results. 
+
+\textbf{Tremor and gait datasets}
+
+For the tremor and fait datasets, three different datasets will be used as well.
+
+\begin{itemize}
+	\item \textbf{Gait in parkinson's disease}: extracted from \textbf{CITAAAAAA}, it contains information about three different datasets that come from three separate studies. Using these three studies in a separate manner, we can treat them as completely independent datastes
+	\begin{itemize}
+		\item Galit Yogev et al dataset. 47 total instances. 
+		\item Hausdorff et al dataset
+		\item Silvi Frenkel-Toledo dataset. 
+	\end{itemize} 
+\end{itemize}
+
+

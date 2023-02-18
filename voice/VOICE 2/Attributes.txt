@@ -1,0 +1,14 @@
+Attribute Information:
+
+1. ID: Subjects's identifier.
+2. Recording: Number of the recording.
+3. Status: 0=Healthy; 1=PD
+4. Gender: 0=Man; 1=Woman
+5. Pitch local perturbation measures: relative jitter (Jitter_rel), absolute jitter (Jitter_abs), relative average perturbation (Jitter_RAP), and pitch perturbation quotient (Jitter_PPQ).
+6. Amplitude perturbation measures: local shimmer (Shim_loc), shimmer in dB (Shim_dB), 3-point amplitude perturbation quotient (Shim_APQ3), 5-point amplitude perturbation quotient (Shim_APQ5), and 11-point amplitude perturbation quotient (Shim_APQ11).
+7. Harmonic-to-noise ratio measures: harmonic-to-noise ratio in the frequency band 0-500 Hz (HNR05), in 0-1500 Hz (HNR15), in 0-2500 Hz (HNR25), in 0-3500 Hz (HNR35), and in 0-3800 Hz (HNR38).
+8. Mel frequency cepstral coefficient-based spectral measures of order 0 to 12 (MFCC0, MFCC1,..., MFCC12) and their derivatives (Delta0, Delta1,..., Delta12).
+9. Recurrence period density entropy (RPDE).
+10. Detrended fluctuation analysis (DFA).
+11. Pitch period entropy (PPE).
+12. Glottal-to-noise excitation ratio (GNE).
