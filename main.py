@@ -2,187 +2,27 @@
 
 import os
 from collections import defaultdict
-from dataclasses import dataclass
-from itertools import product
+from datetime import datetime
 from pathlib import Path
-from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import pandas as pd
-import polars as pl
 from matplotlib import pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (accuracy_score, confusion_matrix,
-                             plot_confusion_matrix)
-from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix, plot_confusion_matrix
+from sklearn.model_selection import cross_val_score
 from sklearn.svm import SVC
+from tensorflow.keras.callbacks import History
 
-from _types.results import BaseResults
 from logger import Logger
 from nn import NeuralNetwork
+from preprocess import Preprocessor
+from tremor import preprocessor as tremor_preprocessor
+from voice import preprocessor as voice_preprocessor
 
 logger = Logger()
+preprocessors = [tremor_preprocessor, voice_preprocessor]
 
-
-@dataclass
-class Preprocessor:
-    dataframe: Optional[pd.DataFrame] = None
-    labels: List[str] = None
-    SVC_params = {
-        "kernel": ["linear", "poly", "rbf", "sigmoid"],
-        "degree": [_ for _ in range(3, 6)],
-        "tol": [1e-3, 1e-4],
-    }
-    RF_params = {
-        "n_estimators": [100, 150, 200, 250, 300],
-        "criterion": ["gini", "entropy"],
-        "max_features": ["sqrt", "log2", None],
-    }
-
-    @staticmethod
-    def normalize_columns_split_label(df: pl.DataFrame, label_col: str) -> pl.DataFrame:
-        """
-        Normalize all columns of the dataframe, except for the label column (which doesn't need
-        normalization)
-        Then return data and labels separately.
-        """
-        df = df.clone()
-        types = df.dtypes
-        for i, col in enumerate(df.columns):
-            if types[i] != pl.Float32:
-                continue
-            if col != label_col:
-                df = df.with_column(
-                    ((pl.col(col) - pl.col(col).mean()) / pl.col(col).std()).alias(col)
-                )
-
-        return df
-
-    def get_parameters(self):
-        def _permutate_dict(parameters: Dict[str, List[Any]]) -> List[Dict[str, str]]:
-            keys, values = zip(*parameters.items())
-            permutations_dicts = [dict(zip(keys, v)) for v in product(*values)]
-            return permutations_dicts
-
-        return {
-            "SVM": _permutate_dict(self.SVC_params),
-            "RF": _permutate_dict(self.RF_params),
-        }
-
-    @logger.log
-    def train_test_split(self, code: Optional[str] = None):
-        df = self.dataframe
-
-        if df is None:
-            raise Exception("First you have to preprocess some data")
-        if code:
-            df = df.filter(pl.col("study") == code)
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            df.select(
-                [col for col in df.columns if col not in ["illness", "study"]]
-            ).to_numpy(),
-            df.get_column("illness").to_numpy(),
-        )
-
-        return X_train, X_test, y_train, y_test
-
-
-class TremorGaitPreprocessor(Preprocessor):
-    @staticmethod
-    def _split_name(file_path: Path) -> Tuple[str, str]:
-        key = "Si"
-        if "Ga" in file_path.name:
-            key = "Ga"
-        if "Ju" in file_path.name:
-            key = "Ju"
-
-        file_name = file_path.name.split(".")[0]
-        if "Pt" in file_name:
-            subject = file_name.split("Pt")[1]
-        else:
-            subject = file_name.split("Co")[1]
-
-        return key, subject
-
-    def load_file(
-        self,
-        file_path: Path,
-        dfs: Dict[str, List[pl.DataFrame]],
-    ) -> None:
-        df = pl.from_pandas(pd.read_csv(file_path, header=None, sep="\t"))
-        key, subject = TremorGaitPreprocessor._split_name(file_path)
-        if self.labels:
-            df = df.with_columns(
-                [pl.col(f"{i}").alias(l) for i, l in enumerate(self.labels)]
-            ).drop(columns=[str(i) for i in range(len(self.labels))])
-        df = df.with_column(pl.lit(subject).alias("subject"))
-        if "Pt" in file_path.name:
-            dfs[key].append(df.with_column(pl.lit(1).alias("illness")))
-        else:
-            dfs[key].append(df.with_column(pl.lit(0).alias("illness")))
-
-    def explode_columns(self, df: pl.DataFrame) -> pl.DataFrame:
-        aggregates = ["mean", "std", "max", "min"]
-        return (
-            df.groupby("subject")
-            .agg(
-                [
-                    *[
-                        getattr(pl.col(col), agg)().alias(f"{col}_{agg}")
-                        for col in self.labels[1:]
-                        for agg in aggregates
-                    ],
-                    pl.col("illness").max().keep_name(),
-                ]
-            )
-            .drop(columns=["subject"])
-        )
-
-    def process_dataframes(self, dfs: List[pl.DataFrame]) -> pl.DataFrame:
-        total_df = pl.DataFrame()
-        for df in dfs:
-            df = self.explode_columns(df)
-            total_df = pl.concat([total_df, df], how="diagonal")
-        return self.__class__.normalize_columns_split_label(
-            total_df, label_col="illness"
-        )
-
-    @logger.log
-    def preprocess(self, directory: str) -> None:
-        dfs: DefaultDict[Any, list] = defaultdict(list)
-        for file in os.listdir(directory):
-            if any(file.startswith(c) for c in studies):
-                path = Path(directory) / file
-                self.load_file(path, dfs)
-
-        compacted_dfs = None
-        for key, _dfs in dfs.items():
-            df_to_append = self.process_dataframes(_dfs).with_column(
-                pl.lit(key).alias("study")
-            )
-            compacted_dfs = (
-                pl.concat([compacted_dfs, df_to_append], how="diagonal")
-                if compacted_dfs is not None
-                else df_to_append
-            )
-
-        # CAMBIAR ESTO !!!!!!!!
-        self.dataframe = compacted_dfs
-
-
-preprocessor = TremorGaitPreprocessor(
-    labels=[
-        "Time",
-        *[f"L{i}" for i in range(1, 9)],
-        *[f"R{i}" for i in range(1, 9)],
-        "LT",
-        "RT",
-    ]
-)
-
-studies = ["Ga", "Ju", "Si"]
-directory = "tremor and gait/gait-in-parkinsons-disease-1.0.0/"
 
 classifiers = {"RF": RandomForestClassifier, "SVM": SVC}
 
@@ -220,6 +60,16 @@ class Results:
         print(f"Confusion matrix:".center(40))
         print(f"Cross validation: {np.mean(self.cross_val_results)}")
         print(f"{self.confusion_matrix}".center(40))
+
+    def results(self) -> str:
+        text = ""
+        text += f"Results for {self.method} \n"
+        text += "------------- \n"
+        text += f"Accuracy: {self.accuracy} \n"
+        text += f"Cross validation: {np.mean(self.cross_val_results)} \n"
+        text += f"Confusion matrix: \n"
+        text += f"{self.confusion_matrix} \n"
+        return text
 
     def plot_confusion_matrix(self) -> None:
         plot_confusion_matrix(self.model, self.X_test, self.actual)
@@ -274,69 +124,64 @@ def train_predict(
 #     NeuralNetwork.show_results(study_results, k)
 
 
-# TODO
-
 # LOAD VOICE DATASETS
-voice2_directory = "./voice/VOICE 2/ReplicatedAcousticFeatures-ParkinsonDatabase.csv"
-voice3_directory = "./voice/VOICE 3/parkinsons_data.csv"
 
-# Italian Parkinsons Dataset
 
-italian_parkinsons = Path("./voice/Italian Parkinson's Voice and speech")
-
-young_healthy = pd.read_excel(
-    italian_parkinsons / "15 Young Healthy Control" / "15 YHC.xlsx",
-    sheet_name=0,
-    header=1,
-).dropna(axis=0)
-older_healthy = (
-    pd.read_excel(
-        italian_parkinsons / "22 Elderly Healthy Control" / "Tab 3.xlsx",
-        sheet_name=0,
-        header=1,
+def run_analysis(
+    preprocessor: Preprocessor,
+) -> Tuple[Results, History]:
+    results: Dict[str, Dict[str, List[Results]]] = defaultdict(
+        lambda: defaultdict(list)
     )
-    .dropna(axis=0)
-    .replace("-", np.nan)
-)
-disease_set = (
-    pd.read_excel(
-        italian_parkinsons / "28 People with Parkinson's disease" / "TAB 5.xlsx",
-        sheet_name=0,
-        header=1,
-        usecols=list(range(1, 11)),
-    )
-    .dropna(axis=0)
-    .replace("//", np.nan)
-)
+    nn_results: Dict[str, Any] = {}
+    for study in preprocessor.dataframes:
+        print("Study: ", study)
+        X_train, X_test, y_train, y_test = preprocessor.train_test_split(study)
+        for key, model in classifiers.items():
+            for params in preprocessor.get_parameters()[key]:
+                results[study][key].append(
+                    train_predict(
+                        key, model(**params), X_train, y_train, X_test, y_test
+                    )
+                )
 
-healthy_young: pl.DataFrame = (
-    pl.from_pandas(young_healthy)
-    .with_columns([pl.lit(0).alias("illness")])
-    .drop(columns="from")
-)
-healthy_old: pl.DataFrame = (
-    pl.from_pandas(older_healthy)
-    .with_columns([pl.lit(0).alias("illness")])
-    .drop(columns="from")
-)
-disease_old: pl.DataFrame = (
-    pl.from_pandas(disease_set)
-    .select([pl.col(c).alias(c.replace(" ", "")) for c in disease_set.columns])
-    .with_columns([pl.lit(1).alias("illness")])
-)
-italian_dataset = pl.concat(
-    [healthy_young, healthy_old, disease_old], how="diagonal"
-).with_columns([pl.lit("it").alias("study")])
-italian_dataset = italian_dataset.with_columns(
-    [(pl.col("name") + " " + pl.col("surname")).alias("name")]
-).drop(columns=["surname"])
-pl.Config.set_tbl_cols(1000)
+        results[study] = {
+            k: sorted(v, key=lambda x: x.accuracy, reverse=True)
+            for k, v in results[study].items()
+        }
 
-# VOICE 2
+        nn = NeuralNetwork(data=X_train, labels=y_train, label_col="illness")
+        nn_results[study] = nn.run(study)
 
-voice2_df = pl.from_pandas(pd.read_csv(voice2_directory))
-print(voice2_df)
+    for k, study_results in results.items():
+        logger.print_results(study_results, k)
 
-# VOICE 3
+    for k, study_results in nn_results.items():
+        NeuralNetwork.show_results(study_results, k)
 
-# COMPARE
+    return results, nn_results
+
+
+def main(filename: str, runs: Optional[int] = 10) -> List[Tuple[Results, History]]:
+    results = []
+    folder = Path("results")
+    runs = runs or 1
+    for i in range(runs):
+        for prep in preprocessors:
+            filepath = Path(folder, filename, f"run_{i}", prep.__class__.__name__)
+            filepath.parent.mkdir(exist_ok=True, parents=True)
+            prep.preprocess()
+            res = run_analysis(prep)
+            results.append(res)
+            with open(filepath, "w") as f:
+                f.write("\n ".join([r.results() for r in res]))
+    return results
+
+
+if __name__ == "__main__":
+    date = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
+    results = main(date)
+    folder = Path("results")
+    filename = folder / f"{date} / total"
+    with open(filename, "w") as f:
+        f.write("\n".join([r.results() for res in results for r in res]))

@@ -65,3 +65,6 @@ class Logger:
             f"Best algorithm: {top_result.method} with an ccuracy of {top_result.accuracy}."
         )
         top_result.plot()
+
+
+logger = Logger()

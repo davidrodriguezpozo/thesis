@@ -19,7 +19,7 @@ class NeuralNetwork:
         self._data = data
         self._labels = labels
         self.label_col = label_col
-        self.results = None
+        self._results = {}
         self.k = k
         self.epochs = epochs
 
@@ -46,12 +46,16 @@ class NeuralNetwork:
         for k, v in history.history.items():
             print(f"{k} : {v[-1]}")
 
+    def results(self):
+        code = list(self._results.keys())[0]
+        history = list(self._results.values())[0]
+        text = f" - Results for {code} - ".center(40)
+        for k, v in history.history.items():
+            text += f"{k} : {v[-1]} \n"
+        return text
+
     @logger.log
-    def _k_fold_validation(
-        self,
-        folds: int,
-        epochs: int,
-    ):
+    def _k_fold_validation(self, folds: int, epochs: int, study: str):
         train_data = self._data
         train_labels = self._labels
         (
@@ -93,11 +97,11 @@ class NeuralNetwork:
             )
             ## NeuralNetwork.show_results(history)
             all_scores.append(history.history)
-        self.results = all_scores
+        self._results[study] = all_scores
         return history
 
     @logger.log
-    def run(self) -> History:
-        history = self._k_fold_validation(self.k, self.num_epochs)
+    def run(self, study: str) -> History:
+        history = self._k_fold_validation(self.k, self.num_epochs, study)
         self.history = history
         return history
