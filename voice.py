@@ -78,7 +78,7 @@ class VoicePreprocessor(Preprocessor):
 
         voice2_df = (
             pl.from_pandas(pd.read_csv(voice2_directory))
-            .drop(columns=["ID"])
+            .drop(columns=["ID", "Recording"])
             .rename({"Status": "illness"})
             .fill_null(0)
         )
@@ -93,9 +93,15 @@ class VoicePreprocessor(Preprocessor):
         )
 
         self.dataframes = {
-            "study1": italian_dataset,
-            "study2": voice2_df,
-            "study3": voice3_df,
+            "study1": self.__class__.normalize_columns_split_label(
+                italian_dataset, "illness"
+            ),
+            "study2": self.__class__.normalize_columns_split_label(
+                voice2_df, "illness"
+            ),
+            "study3": self.__class__.normalize_columns_split_label(
+                voice3_df, "illness"
+            ),
         }
 
 

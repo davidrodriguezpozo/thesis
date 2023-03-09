@@ -1,8 +1,12 @@
+import math
 from dataclasses import dataclass
 from itertools import product
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import polars as pl
+import sklearn
+from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 
 from logger import logger
@@ -14,7 +18,7 @@ class Preprocessor:
     labels: Optional[List[str]] = None
     SVC_params = {
         "kernel": ["linear", "poly", "rbf", "sigmoid"],
-        "degree": [_ for _ in range(3, 6)],
+        "degree": [_ for _ in range(2, 6)],
         "tol": [1e-3, 1e-4],
     }
     RF_params = {
@@ -33,14 +37,24 @@ class Preprocessor:
         normalization)
         Then return data and labels separately.
         """
+
+        def sigmoid(val: float, max: float):
+            if val == 0 and max == 0:
+                return 0
+            exponent = val / max
+            return 1 / (1 + math.exp(-exponent))
+
         df = df.clone()
         types = df.dtypes
         for i, col in enumerate(df.columns):
-            if types[i] != pl.Float32:
+            if types[i] != pl.Float64:
                 continue
             if col != label_col:
+                max_val = df.select(pl.col(col).max()).item()
                 df = df.with_column(
-                    ((pl.col(col) - pl.col(col).mean()) / pl.col(col).std()).alias(col)
+                    pl.col(col)
+                    .apply(lambda x: sigmoid(x, max_val), pl.Float64)
+                    .alias(col)
                 )
 
         return df
@@ -57,7 +71,9 @@ class Preprocessor:
         }
 
     @logger.log
-    def train_test_split(self, code: Optional[str] = None):
+    def train_test_split(
+        self, code: Optional[str] = None, reduce_dimensions: bool = False
+    ):
         dfs = self.dataframes
 
         if dfs is None:
@@ -66,10 +82,24 @@ class Preprocessor:
             df = dfs[code]
         else:
             df = pl.concat([d for d in dfs.values()])
+
+        X_data = df.select(
+            [col for col in df.columns if col not in ["illness", "study"]]
+        ).to_numpy()
+
+        if reduce_dimensions:
+            pca = PCA(
+                n_components="mle"
+                if X_data.shape[0] >= X_data.shape[1]
+                else X_data.shape[0],
+                copy=True,
+            )
+            print("Reducing dimension. Original shape: ", X_data.shape)
+            X_data = pca.fit_transform(X_data)
+            print("Final shape: ", X_data.shape)
+
         X_train, X_test, y_train, y_test = train_test_split(
-            df.select(
-                [col for col in df.columns if col not in ["illness", "study"]]
-            ).to_numpy(),
+            X_data,
             df.get_column("illness").to_numpy(),
         )
 
