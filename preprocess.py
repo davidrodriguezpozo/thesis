@@ -27,7 +27,7 @@ class Preprocessor:
         "max_features": ["sqrt", "log2", None],
     }
 
-    def preprocess(self):
+    def preprocess(self, normalize: bool = False):
         raise NotImplementedError()
 
     @staticmethod

@@ -12,7 +12,7 @@ class VoicePreprocessor(Preprocessor):
     ...
 
     @logger.log
-    def preprocess(self) -> None:
+    def preprocess(self, normalize: bool = False) -> None:
         voice2_directory = (
             "./data/voice/VOICE 2/ReplicatedAcousticFeatures-ParkinsonDatabase.csv"
         )
@@ -95,13 +95,15 @@ class VoicePreprocessor(Preprocessor):
         self.dataframes = {
             "study1": self.__class__.normalize_columns_split_label(
                 italian_dataset, "illness"
-            ),
-            "study2": self.__class__.normalize_columns_split_label(
-                voice2_df, "illness"
-            ),
-            "study3": self.__class__.normalize_columns_split_label(
-                voice3_df, "illness"
-            ),
+            )
+            if normalize
+            else italian_dataset,
+            "study2": self.__class__.normalize_columns_split_label(voice2_df, "illness")
+            if normalize
+            else voice2_df,
+            "study3": self.__class__.normalize_columns_split_label(voice3_df, "illness")
+            if normalize
+            else voice3_df,
         }
 
 

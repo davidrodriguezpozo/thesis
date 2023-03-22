@@ -24,7 +24,7 @@ from tremor import preprocessor as tremor_preprocessor
 from voice import preprocessor as voice_preprocessor
 
 logger = Logger()
-preprocessors = [tremor_preprocessor, voice_preprocessor]
+preprocessors: List[Preprocessor] = [tremor_preprocessor, voice_preprocessor]
 
 
 classifiers = {"RF": RandomForestClassifier, "SVM": SVC}
@@ -190,8 +190,11 @@ def run_analysis(
     return results, nn_results
 
 
-def main(
-    filename: str, runs: Optional[int] = 10, reduce_dimensions: bool = False
+def run(
+    filename: str,
+    runs: Optional[int] = 10,
+    reduce_dimensions: bool = False,
+    normalize: bool = False,
 ) -> List[Tuple[Results, History]]:
     results = []
     folder = Path("results")
@@ -202,7 +205,7 @@ def main(
                 folder, filename, f"run_{i}", prep.__class__.__name__ + ".csv"
             )
             filepath.parent.mkdir(exist_ok=True, parents=True)
-            prep.preprocess()
+            prep.preprocess(normalize=normalize)
             res = run_analysis(prep, reduce_dimensions=reduce_dimensions)
             ml_results = res[0]
             nn_results = res[1]
@@ -229,10 +232,13 @@ def main(
     return results
 
 
+def run_and_store():
+    date = datetime.now().strftime("%m-%d-%Y")
+    run(filename=date)
+    run(filename=date + "_normalized", normalize=True)
+    run(filename=date + "_reduced", reduce_dimensions=True)
+    run(filename=date + "_norm_red", reduce_dimensions=True, normalize=True)
+
+
 if __name__ == "__main__":
-    date = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
-    results = main(date)
-    folder = Path("results")
-    filename = folder / f"{date} / total.csv"
-    with open(filename, "w") as f:
-        f.write("\n".join([r.results() for res in results for r in res]))
+    run_and_store()

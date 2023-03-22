@@ -64,17 +64,21 @@ class TremorGaitPreprocessor(Preprocessor):
             .drop(columns=["subject"])
         )
 
-    def process_dataframes(self, dfs: List[pl.DataFrame]) -> pl.DataFrame:
+    def process_dataframes(
+        self, dfs: List[pl.DataFrame], normalize: bool = False
+    ) -> pl.DataFrame:
         total_df = pl.DataFrame()
         for df in dfs:
             df = self.explode_columns(df)
             total_df = pl.concat([total_df, df], how="diagonal")
-        return self.__class__.normalize_columns_split_label(
-            total_df, label_col="illness"
+        return (
+            self.__class__.normalize_columns_split_label(total_df, label_col="illness")
+            if normalize
+            else total_df
         )
 
     @logger.log
-    def preprocess(self) -> None:
+    def preprocess(self, normalize: bool = False) -> None:
         self.dataframes = {}
         dfs: DefaultDict[Any, list] = defaultdict(list)
         for file in os.listdir(directory):
@@ -83,8 +87,7 @@ class TremorGaitPreprocessor(Preprocessor):
                 self.load_file(path, dfs)
 
         for key, _dfs in dfs.items():
-            self.dataframes[key] = self.process_dataframes(_dfs)
-
+            self.dataframes[key] = self.process_dataframes(_dfs, normalize=normalize)
 
 
 preprocessor = TremorGaitPreprocessor(
